@@ -5,6 +5,7 @@
  * To go live, replace the `*Api` functions with fetch calls to the real
  * endpoints — component code depends only on the types below.
  */
+import { analyzeResume } from "@/lib/interview-server";
 
 export type Level = "Strong" | "Moderate" | "Weak";
 
@@ -28,8 +29,25 @@ export type InterviewQuestion = {
   mockTranscript: string;
 };
 
+export type InterviewSession = {
+  defenseMap: DefenseMap;
+  interviewQuestions: InterviewQuestion[];
+  answers?: InterviewAnswer[];
+  report?: Report;
+};
+
+export type InterviewAnswer = {
+  question: string;
+  topic: string;
+  origin: string;
+  transcript: string;
+};
+
+const interviewSessionKey = "interviewlens-session";
+
 export type Report = {
   score: number;
+  summary: string;
   knowledge: { name: string; score: number; level: Level | "Needs Preparation" }[];
   communication: { label: string; value: number; suffix?: string }[];
   highRiskClaim: { claim: string; explanation: string };
@@ -134,6 +152,8 @@ export const interviewQuestions: InterviewQuestion[] = [
 
 export const report: Report = {
   score: 82,
+  summary:
+    "You defended most of your resume confidently. Two technical areas and one quantified claim need preparation before a real interview.",
   knowledge: [
     { name: "Python", score: 92, level: "Strong" },
     { name: "Machine Learning", score: 88, level: "Strong" },
@@ -165,10 +185,41 @@ export const analysisSteps = [
   "Preparing your interview...",
 ];
 
-/** Swap these for real API calls when the backend is ready. */
-export async function analyzeResumeApi(_file: File | null): Promise<DefenseMap> {
-  await new Promise((r) => setTimeout(r, 400));
-  return defenseMap;
+export function saveInterviewSession(session: InterviewSession) {
+  sessionStorage.setItem(interviewSessionKey, JSON.stringify(session));
+}
+
+export function getInterviewSession(): InterviewSession | null {
+  try {
+    const stored = sessionStorage.getItem(interviewSessionKey);
+    return stored ? (JSON.parse(stored) as InterviewSession) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveInterviewAnswer(answer: InterviewAnswer) {
+  const session = getInterviewSession();
+  if (!session) return;
+
+  const answers = (session.answers ?? []).filter(
+    (item) => item.question !== answer.question || item.topic !== answer.topic,
+  );
+  saveInterviewSession({ ...session, answers: [...answers, answer] });
+}
+
+export function saveInterviewReport(dynamicReport: Report) {
+  const session = getInterviewSession();
+  if (session) saveInterviewSession({ ...session, report: dynamicReport });
+}
+
+/** Uses demo data only when no resume is selected. */
+export async function analyzeResumeApi(file: File | null): Promise<InterviewSession> {
+  if (!file) return { defenseMap, interviewQuestions };
+
+  const formData = new FormData();
+  formData.set("resume", file);
+  return analyzeResume({ data: formData });
 }
 
 export async function getInterviewApi(): Promise<InterviewQuestion[]> {

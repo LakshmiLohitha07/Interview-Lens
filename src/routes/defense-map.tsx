@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { PageShell } from "@/components/lens/PageShell";
 import { GlassCard, SectionLabel } from "@/components/lens/GlassCard";
 import { LevelBadge, ScoreBar } from "@/components/lens/LevelBadge";
 import { Button } from "@/components/ui/button";
-import { defenseMap } from "@/lib/interview-data";
+import { defenseMap, getInterviewSession } from "@/lib/interview-data";
 import { AlertTriangle, Boxes, Cpu, FolderGit2 } from "lucide-react";
 
 const title = "Your Resume Defense Map — InterviewLens";
@@ -23,6 +24,13 @@ export const Route = createFileRoute("/defense-map")({
 });
 
 function DefenseMapPage() {
+  const [currentDefenseMap, setCurrentDefenseMap] = useState(defenseMap);
+
+  useEffect(() => {
+    const session = getInterviewSession();
+    if (session) setCurrentDefenseMap(session.defenseMap);
+  }, []);
+
   return (
     <PageShell>
       <div className="animate-rise">
@@ -44,7 +52,7 @@ function DefenseMapPage() {
           These statements will be challenged directly in your interview.
         </p>
         <div className="mt-5 grid gap-3 md:grid-cols-2">
-          {defenseMap.claims.map((c) => (
+          {currentDefenseMap.claims.map((c) => (
             <div
               key={c.text}
               className="rounded-xl border border-border bg-background/40 p-4 transition-colors hover:border-primary/40"
@@ -66,7 +74,7 @@ function DefenseMapPage() {
             <SectionLabel>Skills</SectionLabel>
           </div>
           <div className="mt-5 space-y-4">
-            {defenseMap.skills.map((s) => (
+            {currentDefenseMap.skills.map((s) => (
               <div key={s.name} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">{s.name}</span>
@@ -84,7 +92,7 @@ function DefenseMapPage() {
             <SectionLabel>Projects</SectionLabel>
           </div>
           <div className="mt-5 space-y-4">
-            {defenseMap.projects.map((p) => (
+            {currentDefenseMap.projects.map((p) => (
               <div key={p.name} className="rounded-xl border border-border bg-background/40 p-4">
                 <p className="text-sm font-medium">{p.name}</p>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{p.summary}</p>
@@ -106,7 +114,7 @@ function DefenseMapPage() {
             <SectionLabel>Technologies</SectionLabel>
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
-            {defenseMap.technologies.map((t) => (
+            {currentDefenseMap.technologies.map((t) => (
               <span key={t} className="rounded-lg border border-border bg-background/40 px-3 py-1.5 text-xs">
                 {t}
               </span>

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { PageShell } from "@/components/lens/PageShell";
 import { GlassCard } from "@/components/lens/GlassCard";
 import { Button } from "@/components/ui/button";
-import { analysisSteps, analyzeResumeApi } from "@/lib/interview-data";
+import { analysisSteps, analyzeResumeApi, saveInterviewSession } from "@/lib/interview-data";
 import { CheckCircle2, FileText, Loader2, UploadCloud } from "lucide-react";
 
 const title = "Upload Your Resume — InterviewLens";
@@ -33,7 +33,10 @@ function UploadPage() {
   useEffect(() => {
     if (!analyzing) return;
     if (step >= analysisSteps.length) {
-      void analyzeResumeApi(file).then(() => navigate({ to: "/defense-map" }));
+      void analyzeResumeApi(file).then((session) => {
+        saveInterviewSession(session);
+        navigate({ to: "/defense-map" });
+      });
       return;
     }
     const t = setTimeout(() => setStep((s) => s + 1), 900);

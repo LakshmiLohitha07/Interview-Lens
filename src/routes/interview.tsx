@@ -3,7 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { PageShell } from "@/components/lens/PageShell";
 import { GlassCard, SectionLabel } from "@/components/lens/GlassCard";
 import { Button } from "@/components/ui/button";
-import { interviewQuestions } from "@/lib/interview-data";
+import {
+  getInterviewSession,
+  interviewQuestions,
+  saveInterviewAnswer,
+  saveInterviewReport,
+  type InterviewQuestion,
+} from "@/lib/interview-data";
+import { evaluateInterviewAnswer, generateInterviewReport } from "@/lib/interview-server";
 import { Mic, Sparkles, Loader2, Radio } from "lucide-react";
 
 const title = "Resume Defense Interview — InterviewLens";
@@ -50,16 +57,35 @@ function InterviewPage() {
   const [phase, setPhase] = useState<Phase>("asking");
   const [transcript, setTranscript] = useState("");
   const [speechError, setSpeechError] = useState("");
+  const [questions, setQuestions] = useState<InterviewQuestion[]>(interviewQuestions);
+  const [followUp, setFollowUp] = useState<{ question: string; origin: string } | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const transcriptRef = useRef("");
   const speechErrorRef = useRef("");
   const isRecordingRef = useRef(false);
   const shouldSubmitRef = useRef(false);
 
-  const q = interviewQuestions[index]!;
-  const isFollowUp = phase === "followup" && q.followUp;
-  const activeQuestion = isFollowUp ? q.followUp!.question : q.question;
-  const activeOrigin = isFollowUp ? q.followUp!.origin : q.origin;
+  const q = questions[index] ?? questions[0]!;
+  const isFollowUp = followUp !== null;
+  const activeQuestion = isFollowUp ? followUp.question : q.question;
+  const activeOrigin = isFollowUp ? followUp.origin : q.origin;
+
+  useEffect(() => {
+    const session = getInterviewSession();
+    if (session?.interviewQuestions.length) {
+      setQuestions(session.interviewQuestions);
+      setIndex(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(activeQuestion));
+
+    return () => window.speechSynthesis.cancel();
+  }, [activeQuestion]);
 
   useEffect(() => {
     return () => {
@@ -77,11 +103,54 @@ function InterviewPage() {
 
   useEffect(() => {
     if (phase !== "analyzing") return;
-    const t = setTimeout(() => {
-      if (q.followUp) setPhase("followup");
-      else next();
-    }, 1600);
-    return () => clearTimeout(t);
+    let cancelled = false;
+
+    async function evaluateAnswer() {
+      try {
+        const nextQuestion = questions[index + 1];
+        const previousContext = getInterviewSession()
+          ?.answers?.slice(-3)
+          .map((answer) => `${answer.question}\n${answer.transcript}`)
+          .join("\n\n");
+        const decision = await evaluateInterviewAnswer({
+          data: {
+            question: activeQuestion,
+            transcript: transcriptRef.current,
+            topic: q.topic,
+            origin: activeOrigin,
+            ...(previousContext ? { previousContext } : {}),
+            ...(nextQuestion
+              ? { nextQuestion: { question: nextQuestion.question, origin: nextQuestion.origin } }
+              : {}),
+          },
+        });
+        if (cancelled) return;
+
+        saveInterviewAnswer({
+          question: activeQuestion,
+          topic: q.topic,
+          origin: activeOrigin,
+          transcript: transcriptRef.current,
+        });
+
+        if (decision.decision === "followup") {
+          setFollowUp({ question: decision.question, origin: decision.origin });
+          setPhase("followup");
+          return;
+        }
+
+        void next();
+      } catch {
+        if (cancelled) return;
+        setSpeechError("AI evaluation failed. Please try recording your answer again.");
+        setPhase("asking");
+      }
+    }
+
+    void evaluateAnswer();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -182,12 +251,37 @@ function InterviewPage() {
     recognitionRef.current?.stop();
   }
 
-  function next() {
-    if (index >= interviewQuestions.length - 1) {
-      navigate({ to: "/report" });
+  async function next() {
+    if (index >= questions.length - 1) {
+      const session = getInterviewSession();
+      if (!session?.answers?.length) {
+        navigate({ to: "/report" });
+        return;
+      }
+
+      try {
+        const dynamicReport = await generateInterviewReport({
+          data: {
+            defenseMap: session.defenseMap,
+            questions: session.interviewQuestions.map(({ id, topic, question, origin }) => ({
+              id,
+              topic,
+              question,
+              origin,
+            })),
+            answers: session.answers,
+          },
+        });
+        saveInterviewReport(dynamicReport);
+        navigate({ to: "/report" });
+      } catch {
+        setSpeechError("Report generation failed. Please try recording your answer again.");
+        setPhase("asking");
+      }
       return;
     }
     setIndex((i) => i + 1);
+    setFollowUp(null);
     setPhase("asking");
     setTranscript("");
     transcriptRef.current = "";
@@ -197,7 +291,7 @@ function InterviewPage() {
     setSpeechError("");
   }
 
-  const progress = ((index + 1) / interviewQuestions.length) * 100;
+  const progress = ((index + 1) / questions.length) * 100;
 
   return (
     <PageShell>
@@ -211,7 +305,7 @@ function InterviewPage() {
           <GlassCard glow>
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">
-                Question {index + 1} / {interviewQuestions.length}
+                Question {index + 1} / {questions.length}
               </span>
               <span className="rounded-full border border-border bg-secondary/60 px-3 py-1 text-xs">
                 Current topic: <span className="text-primary">{q.topic}</span>
@@ -258,7 +352,7 @@ function InterviewPage() {
                 <span className="text-sm text-muted-foreground">Listening...</span>
               )}
               {phase === "followup" && (
-                <Button variant="outline" onClick={next}>
+                <Button variant="outline" onClick={() => void next()}>
                   Next question
                 </Button>
               )}
@@ -304,7 +398,7 @@ function InterviewPage() {
               InterviewLens adapts and asks a deeper follow-up before moving on.
             </p>
             <div className="mt-4 space-y-2">
-              {interviewQuestions.map((item, i) => (
+              {questions.map((item, i) => (
                 <div
                   key={item.id}
                   className={`flex items-center gap-2 text-xs ${

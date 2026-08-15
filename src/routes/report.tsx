@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { PageShell } from "@/components/lens/PageShell";
 import { GlassCard, SectionLabel } from "@/components/lens/GlassCard";
 import { LevelBadge, ScoreBar } from "@/components/lens/LevelBadge";
 import { Button } from "@/components/ui/button";
-import { report } from "@/lib/interview-data";
+import { getInterviewSession, report } from "@/lib/interview-data";
 import { AlertTriangle, ListChecks } from "lucide-react";
 
 const title = "Your Resume Defense Report — InterviewLens";
@@ -23,6 +24,13 @@ export const Route = createFileRoute("/report")({
 });
 
 function ReportPage() {
+  const [reportData, setReportData] = useState(report);
+
+  useEffect(() => {
+    const session = getInterviewSession();
+    if (session?.report) setReportData(session.report);
+  }, []);
+
   const c = 2 * Math.PI * 54;
   return (
     <PageShell>
@@ -45,7 +53,7 @@ function ReportPage() {
                 strokeLinecap="round"
                 fill="none"
                 strokeDasharray={c}
-                strokeDashoffset={c * (1 - report.score / 100)}
+                strokeDashoffset={c * (1 - reportData.score / 100)}
               />
               <defs>
                 <linearGradient id="reportGrad" x1="0" y1="0" x2="1" y2="1">
@@ -55,16 +63,13 @@ function ReportPage() {
               </defs>
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="font-display text-4xl font-semibold">{report.score}</span>
+              <span className="font-display text-4xl font-semibold">{reportData.score}</span>
               <span className="text-xs text-muted-foreground">/ 100</span>
             </div>
           </div>
           <div>
-            <h2 className="text-2xl font-semibold">Resume Defense Score — {report.score}/100</h2>
-            <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-              You defended most of your resume confidently. Two technical areas and one quantified
-              claim need preparation before a real interview.
-            </p>
+            <h2 className="text-2xl font-semibold">Resume Defense Score — {reportData.score}/100</h2>
+            <p className="mt-2 max-w-lg text-sm text-muted-foreground">{reportData.summary}</p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Button asChild>
                 <Link to="/interview">Practice Again</Link>
@@ -81,7 +86,7 @@ function ReportPage() {
         <GlassCard>
           <SectionLabel>Knowledge Defense</SectionLabel>
           <div className="mt-5 space-y-4">
-            {report.knowledge.map((k) => (
+            {reportData.knowledge.map((k) => (
               <div key={k.name} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">{k.name}</span>
@@ -99,7 +104,7 @@ function ReportPage() {
         <GlassCard>
           <SectionLabel>Communication</SectionLabel>
           <div className="mt-5 grid grid-cols-2 gap-4">
-            {report.communication.map((m) => (
+            {reportData.communication.map((m) => (
               <div key={m.label} className="rounded-xl border border-border bg-background/40 p-4">
                 <p className="text-xs text-muted-foreground">{m.label}</p>
                 <p className="mt-1 font-display text-2xl font-semibold">{m.value}</p>
@@ -115,9 +120,9 @@ function ReportPage() {
             <AlertTriangle className="h-4 w-4 text-weak" />
             <SectionLabel>High-Risk Claim</SectionLabel>
           </div>
-          <p className="mt-4 text-base font-medium">“{report.highRiskClaim.claim}”</p>
+          <p className="mt-4 text-base font-medium">“{reportData.highRiskClaim.claim}”</p>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            {report.highRiskClaim.explanation}
+            {reportData.highRiskClaim.explanation}
           </p>
         </GlassCard>
 
@@ -127,7 +132,7 @@ function ReportPage() {
             <SectionLabel>Personalized Preparation</SectionLabel>
           </div>
           <ol className="mt-4 space-y-3">
-            {report.preparation.map((p, i) => (
+            {reportData.preparation.map((p, i) => (
               <li key={p} className="flex gap-3 text-sm">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs text-primary">
                   {i + 1}
