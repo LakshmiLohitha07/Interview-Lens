@@ -53,6 +53,8 @@ function InterviewPage() {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const transcriptRef = useRef("");
   const speechErrorRef = useRef("");
+  const isRecordingRef = useRef(false);
+  const shouldSubmitRef = useRef(false);
 
   const q = interviewQuestions[index]!;
   const isFollowUp = phase === "followup" && q.followUp;
@@ -66,6 +68,8 @@ function InterviewPage() {
       recognition.onresult = null;
       recognition.onerror = null;
       recognition.onend = null;
+      isRecordingRef.current = false;
+      shouldSubmitRef.current = false;
       recognition.abort();
       recognitionRef.current = null;
     };
@@ -104,10 +108,11 @@ function InterviewPage() {
     setTranscript("");
     transcriptRef.current = "";
     speechErrorRef.current = "";
+    shouldSubmitRef.current = false;
     setSpeechError("");
 
     const recognition = new Recognition();
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = navigator.language || "en-US";
     recognition.onresult = (event) => {
@@ -124,10 +129,29 @@ function InterviewPage() {
           ? "Microphone permission was denied. Please allow microphone access and try again."
           : "Speech recognition could not start. Please try again.";
       speechErrorRef.current = message;
+      isRecordingRef.current = false;
       setSpeechError(message);
     };
     recognition.onend = () => {
       recognitionRef.current = null;
+      if (isRecordingRef.current) {
+        try {
+          recognition.start();
+          recognitionRef.current = recognition;
+          return;
+        } catch {
+          const message = "Speech recognition could not restart. Please try again.";
+          speechErrorRef.current = message;
+          isRecordingRef.current = false;
+          setSpeechError(message);
+          setPhase("asking");
+          return;
+        }
+      }
+      if (!shouldSubmitRef.current) {
+        setPhase("asking");
+        return;
+      }
       if (transcriptRef.current) {
         setPhase("analyzing");
       } else {
@@ -139,11 +163,13 @@ function InterviewPage() {
     };
 
     recognitionRef.current = recognition;
+    isRecordingRef.current = true;
     try {
       recognition.start();
       setPhase("listening");
     } catch {
       recognitionRef.current = null;
+      isRecordingRef.current = false;
       const message = "Speech recognition could not start. Please try again.";
       speechErrorRef.current = message;
       setSpeechError(message);
@@ -151,6 +177,8 @@ function InterviewPage() {
   }
 
   function submitAnswer() {
+    isRecordingRef.current = false;
+    shouldSubmitRef.current = true;
     recognitionRef.current?.stop();
   }
 
@@ -164,6 +192,8 @@ function InterviewPage() {
     setTranscript("");
     transcriptRef.current = "";
     speechErrorRef.current = "";
+    isRecordingRef.current = false;
+    shouldSubmitRef.current = false;
     setSpeechError("");
   }
 
