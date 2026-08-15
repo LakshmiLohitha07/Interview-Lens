@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DefenseMapRouteImport } from './routes/defense-map'
+import { Route as InterviewRouteImport } from './routes/interview'
 import { Route as ReportRouteImport } from './routes/report'
 import { Route as UploadRouteImport } from './routes/upload'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const DefenseMapRoute = DefenseMapRouteImport.update({
   id: '/defense-map',
   path: '/defense-map',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InterviewRoute = InterviewRouteImport.update({
+  id: '/interview',
+  path: '/interview',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportRoute = ReportRouteImport.update({
@@ -38,12 +44,14 @@ const UploadRoute = UploadRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/defense-map': typeof DefenseMapRoute
+  '/interview': typeof InterviewRoute
   '/report': typeof ReportRoute
   '/upload': typeof UploadRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/defense-map': typeof DefenseMapRoute
+  '/interview': typeof InterviewRoute
   '/report': typeof ReportRoute
   '/upload': typeof UploadRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/defense-map': typeof DefenseMapRoute
+  '/interview': typeof InterviewRoute
   '/report': typeof ReportRoute
   '/upload': typeof UploadRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/defense-map' | '/report' | '/upload'
+  fullPaths: '/' | '/defense-map' | '/interview' | '/report' | '/upload'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/defense-map' | '/report' | '/upload'
-  id: '__root__' | '/' | '/defense-map' | '/report' | '/upload'
+  to: '/' | '/defense-map' | '/interview' | '/report' | '/upload'
+  id: '__root__' | '/' | '/defense-map' | '/interview' | '/report' | '/upload'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DefenseMapRoute: typeof DefenseMapRoute
+  InterviewRoute: typeof InterviewRoute
   ReportRoute: typeof ReportRoute
   UploadRoute: typeof UploadRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/defense-map'
       fullPath: '/defense-map'
       preLoaderRoute: typeof DefenseMapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/interview': {
+      id: '/interview'
+      path: '/interview'
+      fullPath: '/interview'
+      preLoaderRoute: typeof InterviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DefenseMapRoute: DefenseMapRoute,
+  InterviewRoute: InterviewRoute,
   ReportRoute: ReportRoute,
   UploadRoute: UploadRoute,
 }

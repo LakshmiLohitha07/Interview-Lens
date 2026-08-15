@@ -31,7 +31,7 @@ function InterviewPage() {
   const [transcript, setTranscript] = useState("");
   const [typed, setTyped] = useState(0);
 
-  const q = interviewQuestions[index];
+  const q = interviewQuestions[index]!;
   const isFollowUp = phase === "followup" && q.followUp;
   const activeQuestion = isFollowUp ? q.followUp!.question : q.question;
   const activeOrigin = isFollowUp ? q.followUp!.origin : q.origin;
