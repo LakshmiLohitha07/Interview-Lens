@@ -52,6 +52,7 @@ function InterviewPage() {
   const [speechError, setSpeechError] = useState("");
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const transcriptRef = useRef("");
+  const speechErrorRef = useRef("");
 
   const q = interviewQuestions[index]!;
   const isFollowUp = phase === "followup" && q.followUp;
@@ -102,6 +103,7 @@ function InterviewPage() {
 
     setTranscript("");
     transcriptRef.current = "";
+    speechErrorRef.current = "";
     setSpeechError("");
 
     const recognition = new Recognition();
@@ -121,6 +123,7 @@ function InterviewPage() {
         event.error === "not-allowed" || event.error === "service-not-allowed"
           ? "Microphone permission was denied. Please allow microphone access and try again."
           : "Speech recognition could not start. Please try again.";
+      speechErrorRef.current = message;
       setSpeechError(message);
     };
     recognition.onend = () => {
@@ -128,6 +131,9 @@ function InterviewPage() {
       if (transcriptRef.current) {
         setPhase("analyzing");
       } else {
+        if (!speechErrorRef.current) {
+          setSpeechError("No speech detected. Try again.");
+        }
         setPhase("asking");
       }
     };
@@ -138,7 +144,9 @@ function InterviewPage() {
       setPhase("listening");
     } catch {
       recognitionRef.current = null;
-      setSpeechError("Speech recognition could not start. Please try again.");
+      const message = "Speech recognition could not start. Please try again.";
+      speechErrorRef.current = message;
+      setSpeechError(message);
     }
   }
 
@@ -155,6 +163,7 @@ function InterviewPage() {
     setPhase("asking");
     setTranscript("");
     transcriptRef.current = "";
+    speechErrorRef.current = "";
     setSpeechError("");
   }
 
@@ -210,17 +219,14 @@ function InterviewPage() {
                 size="lg"
                 variant={phase === "listening" ? "secondary" : "default"}
                 disabled={phase === "analyzing"}
-                onPointerDown={(event) => {
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  startListening();
-                }}
-                onPointerUp={submitAnswer}
-                onPointerCancel={submitAnswer}
-                onLostPointerCapture={submitAnswer}
+                onClick={phase === "listening" ? submitAnswer : startListening}
               >
                 <Mic className="mr-2 h-4 w-4" />
-                {phase === "listening" ? "Listening..." : "Hold to Answer"}
+                {phase === "listening" ? "Stop Recording" : "Start Recording"}
               </Button>
+              {phase === "listening" && (
+                <span className="text-sm text-muted-foreground">Listening...</span>
+              )}
               {phase === "followup" && (
                 <Button variant="outline" onClick={next}>
                   Next question
