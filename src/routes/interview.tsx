@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageShell } from "@/components/lens/PageShell";
 import { GlassCard, SectionLabel } from "@/components/lens/GlassCard";
 import { Button } from "@/components/ui/button";
@@ -24,29 +24,51 @@ export const Route = createFileRoute("/interview")({
 
 type Phase = "asking" | "listening" | "analyzing" | "followup";
 
+type SpeechRecognitionInstance = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+};
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+
+type SpeechRecognitionEvent = {
+  results: ArrayLike<{ 0: { transcript: string } }>;
+};
+
+type SpeechRecognitionErrorEvent = { error: string };
+
 function InterviewPage() {
   const navigate = useNavigate();
   const [index, setIndex] = useState(1);
   const [phase, setPhase] = useState<Phase>("asking");
   const [transcript, setTranscript] = useState("");
-  const [typed, setTyped] = useState(0);
+  const [speechError, setSpeechError] = useState("");
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const transcriptRef = useRef("");
 
   const q = interviewQuestions[index]!;
   const isFollowUp = phase === "followup" && q.followUp;
   const activeQuestion = isFollowUp ? q.followUp!.question : q.question;
   const activeOrigin = isFollowUp ? q.followUp!.origin : q.origin;
 
-  // Simulated live transcription while "listening".
   useEffect(() => {
-    if (phase !== "listening") return;
-    const words = q.mockTranscript.split(" ");
-    if (typed >= words.length) return;
-    const t = setTimeout(() => {
-      setTranscript(words.slice(0, typed + 1).join(" "));
-      setTyped((n) => n + 1);
-    }, 90);
-    return () => clearTimeout(t);
-  }, [phase, typed, q.mockTranscript]);
+    return () => {
+      const recognition = recognitionRef.current;
+      if (!recognition) return;
+      recognition.onresult = null;
+      recognition.onerror = null;
+      recognition.onend = null;
+      recognition.abort();
+      recognitionRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (phase !== "analyzing") return;
@@ -59,14 +81,69 @@ function InterviewPage() {
   }, [phase]);
 
   function startListening() {
+    if (recognitionRef.current) return;
+
+    const Recognition = (
+      window as Window & {
+        SpeechRecognition?: SpeechRecognitionConstructor;
+        webkitSpeechRecognition?: SpeechRecognitionConstructor;
+      }
+    ).SpeechRecognition ??
+      (
+        window as Window & {
+          webkitSpeechRecognition?: SpeechRecognitionConstructor;
+        }
+      ).webkitSpeechRecognition;
+
+    if (!Recognition) {
+      setSpeechError("Speech recognition is unavailable in this browser.");
+      return;
+    }
+
     setTranscript("");
-    setTyped(0);
-    setPhase("listening");
+    transcriptRef.current = "";
+    setSpeechError("");
+
+    const recognition = new Recognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || "en-US";
+    recognition.onresult = (event) => {
+      const nextTranscript = Array.from(event.results)
+        .map((result) => result[0]?.transcript ?? "")
+        .join("")
+        .trim();
+      transcriptRef.current = nextTranscript;
+      setTranscript(nextTranscript);
+    };
+    recognition.onerror = (event) => {
+      const message =
+        event.error === "not-allowed" || event.error === "service-not-allowed"
+          ? "Microphone permission was denied. Please allow microphone access and try again."
+          : "Speech recognition could not start. Please try again.";
+      setSpeechError(message);
+    };
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      if (transcriptRef.current) {
+        setPhase("analyzing");
+      } else {
+        setPhase("asking");
+      }
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setPhase("listening");
+    } catch {
+      recognitionRef.current = null;
+      setSpeechError("Speech recognition could not start. Please try again.");
+    }
   }
 
   function submitAnswer() {
-    if (!transcript) setTranscript(q.mockTranscript);
-    setPhase("analyzing");
+    recognitionRef.current?.stop();
   }
 
   function next() {
@@ -77,7 +154,8 @@ function InterviewPage() {
     setIndex((i) => i + 1);
     setPhase("asking");
     setTranscript("");
-    setTyped(0);
+    transcriptRef.current = "";
+    setSpeechError("");
   }
 
   const progress = ((index + 1) / interviewQuestions.length) * 100;
@@ -132,10 +210,13 @@ function InterviewPage() {
                 size="lg"
                 variant={phase === "listening" ? "secondary" : "default"}
                 disabled={phase === "analyzing"}
-                onMouseDown={startListening}
-                onMouseUp={submitAnswer}
-                onTouchStart={startListening}
-                onTouchEnd={submitAnswer}
+                onPointerDown={(event) => {
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  startListening();
+                }}
+                onPointerUp={submitAnswer}
+                onPointerCancel={submitAnswer}
+                onLostPointerCapture={submitAnswer}
               >
                 <Mic className="mr-2 h-4 w-4" />
                 {phase === "listening" ? "Listening..." : "Hold to Answer"}
@@ -159,6 +240,7 @@ function InterviewPage() {
               {transcript || "Hold the microphone button and start speaking..."}
               {phase === "listening" && <span className="ml-0.5 animate-pulse text-primary">|</span>}
             </p>
+            {speechError && <p className="mt-3 text-xs text-weak">{speechError}</p>}
           </GlassCard>
         </div>
 
